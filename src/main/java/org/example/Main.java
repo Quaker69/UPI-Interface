@@ -1,138 +1,149 @@
 package org.example;
 
-
-
-
-
-
+import com.github.sarxos.webcam.Webcam;
+import com.github.sarxos.webcam.WebcamResolution;
 import com.google.zxing.*;
+import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
+import com.google.zxing.client.j2se.MatrixToImageWriter;
+import com.google.zxing.common.BitMatrix;
 import com.google.zxing.common.HybridBinarizer;
 import com.google.zxing.qrcode.QRCodeReader;
-import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
-import com.github.sarxos.webcam.Webcam;
-import com.github.sarxos.webcam.WebcamException;
-import com.github.sarxos.webcam.WebcamResolution;
-
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-import com.google.zxing.*;
-import com.google.zxing.common.HybridBinarizer;
-import com.google.zxing.qrcode.QRCodeReader;
-import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
-import com.github.sarxos.webcam.Webcam;
-import com.github.sarxos.webcam.WebcamException;
-import com.github.sarxos.webcam.WebcamResolution;
+import com.google.zxing.qrcode.QRCodeWriter;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.IOException;
+import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Main {
+    private static final String VPA = "9901529618@ybl"; // Replace with actual UPI ID
+    private static final String PAYEE_NAME = "Shashidhar"; // Replace with your name
+    private static final String CURRENCY = "INR"; // Currency format
 
     public static void main(String[] args) {
-        // Initialize the webcam
-        Webcam webcam = null;
-        try {
-            webcam = Webcam.getDefault();
-            if (webcam == null) {
-                System.out.println("No webcam detected");
-                return;
-            }
+        // Show option dialog
+        String[] options = {"Generate QR Code", "Scan QR Code"};
+        int choice = JOptionPane.showOptionDialog(null, "Choose an option:", "UPI QR Code App",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
 
-            // Set resolution
-            webcam.setViewSize(WebcamResolution.VGA.getSize());
-
-            // Open the webcam
-            webcam.open();
-
-            // QR Code decoder
-            QRCodeReader qrCodeReader = new QRCodeReader();
-
-            System.out.println("Starting webcam to scan QR Code...");
-
-            // Continuously capture frames from the webcam
-            while (true) {
-                BufferedImage image = webcam.getImage();
-
-                // Convert BufferedImage to LuminanceSource for ZXing
-                LuminanceSource source = new BufferedImageLuminanceSource(image);
-                BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(source));
-
-                try {
-                    // Decode the QR code from the frame
-                    Result result = qrCodeReader.decode(bitmap);
-
-                    // Print the decoded QR code content
-                    System.out.println("Decoded QR Code: " + result.getText());
-
-                    // Check if the QR code contains UPI details
-                    String qrData = result.getText();
-                    if (qrData.startsWith("upi://pay")) {
-                        String[] dataParts = qrData.split("&");
-                        for (String part : dataParts) {
-                            if (part.startsWith("pa=")) {
-                                System.out.println("Payee VPA (pa): " + part.substring(3));
-                            } else if (part.startsWith("pn=")) {
-                                System.out.println("Payee Name (pn): " + part.substring(3));
-                            } else if (part.startsWith("am=")) {
-                                System.out.println("Amount (am): " + part.substring(3));
-                            }
-                        }
-
-                        // Capture and display the image when QR code is detected
-                        saveAndDisplayImage(image);
-                    }
-
-                } catch (NotFoundException | ChecksumException | FormatException e) {
-                    // No QR code found or error decoding, just continue
-                    // System.out.println("No QR code found.");
-                }
-
-                // Add a small delay to avoid overloading the CPU
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-        } catch (WebcamException e) {
-            e.printStackTrace();
-        } finally {
-            if (webcam != null) {
-                webcam.close();
-            }
+        if (choice == 0) {
+            generateUPIQRCode();
+        } else if (choice == 1) {
+            scanQRCode();
         }
     }
 
-    // Method to save and display the captured image
-    private static void saveAndDisplayImage(BufferedImage image) {
+    // Method to generate UPI QR Code
+    private static void generateUPIQRCode() {
+        String amount = JOptionPane.showInputDialog("Enter amount:");
+
+        if (amount == null || amount.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(null, "Amount cannot be empty!", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
         try {
-            // Save the image to a file
-            File outputfile = new File("captured_qr_image.png");
-            javax.imageio.ImageIO.write(image, "PNG", outputfile);
-            System.out.println("Image saved to: " + outputfile.getAbsolutePath());
+            // Generate UPI QR Code String
+            String upiLink = "upi://pay?pa=" + VPA + "&pn=" + PAYEE_NAME + "&am=" + amount + "&cu=" + CURRENCY;
+            System.out.println("Generated UPI Link: " + upiLink);
 
-            // Display the image in a window
-            displayImage(image);
+            // Generate QR Code
+            QRCodeWriter qrCodeWriter = new QRCodeWriter();
+            BitMatrix bitMatrix = qrCodeWriter.encode(upiLink, BarcodeFormat.QR_CODE, 300, 300);
 
-        } catch (IOException e) {
+            // Save as Image
+            String filePath = "upi_qr.png";
+            MatrixToImageWriter.writeToPath(bitMatrix, "PNG", Paths.get(filePath));
+            System.out.println("UPI QR Code saved: " + filePath);
+
+            // Show QR Code in GUI
+            BufferedImage qrImage = MatrixToImageWriter.toBufferedImage(bitMatrix);
+            showImage(qrImage, "Generated UPI QR Code");
+
+        } catch (Exception e) {
             e.printStackTrace();
+            JOptionPane.showMessageDialog(null, "Error generating QR Code!", "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    // Method to display the captured image in a JFrame
-    private static void displayImage(BufferedImage image) {
-        JFrame frame = new JFrame("Captured QR Code Image");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(640, 480);
+    // Method to scan QR Code
+    private static void scanQRCode() {
+        Webcam webcam = Webcam.getDefault();
+        if (webcam == null) {
+            JOptionPane.showMessageDialog(null, "No webcam detected!", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
 
-        // Create a label to hold the image
+        webcam.setViewSize(WebcamResolution.VGA.getSize());
+        webcam.open();
+        QRCodeReader qrCodeReader = new QRCodeReader();
+
+        JOptionPane.showMessageDialog(null, "Position the QR Code in front of the camera.");
+
+        while (true) {
+            BufferedImage image = webcam.getImage();
+
+            // Convert to BinaryBitmap for ZXing
+            LuminanceSource source = new BufferedImageLuminanceSource(image);
+            BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(source));
+
+            try {
+                // Decode QR Code
+                Result result = qrCodeReader.decode(bitmap);
+                String qrText = result.getText();
+                System.out.println("Scanned QR Code: " + qrText);
+
+                if (qrText.startsWith("upi://pay")) {
+                    // Extract UPI Payment Details
+                    Map<String, String> upiData = parseUPIQRCode(qrText);
+                    String message = "Payee: " + upiData.get("pn") + "\nVPA: " + upiData.get("pa") +
+                            "\nAmount: ₹" + upiData.get("am");
+
+                    JOptionPane.showMessageDialog(null, message, "UPI Payment Details", JOptionPane.INFORMATION_MESSAGE);
+                }
+
+                break; // Stop scanning after successful scan
+            } catch (NotFoundException | ChecksumException | FormatException e) {
+                // No QR code found, continue scanning
+            }
+
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        webcam.close();
+    }
+
+    // Method to parse scanned UPI QR code
+    private static Map<String, String> parseUPIQRCode(String qrData) {
+        Map<String, String> upiData = new HashMap<>();
+        String[] parts = qrData.split("&");
+
+        for (String part : parts) {
+            String[] keyValue = part.split("=");
+            if (keyValue.length == 2) {
+                upiData.put(keyValue[0].replace("upi://pay?", ""), keyValue[1]);
+            }
+        }
+
+        return upiData;
+    }
+
+    // Method to display an image in a JFrame
+    private static void showImage(BufferedImage image, String title) {
+        JFrame frame = new JFrame(title);
+        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        frame.setSize(400, 400);
+
         JLabel label = new JLabel(new ImageIcon(image));
-        frame.add(label, BorderLayout.CENTER);
+        frame.add(label);
 
-        // Display the window
         frame.setVisible(true);
     }
 }
